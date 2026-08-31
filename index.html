@@ -19,9 +19,8 @@
     <section class="card">
       <h2>1. 上传照片</h2>
       <div id="dropZone" class="dropzone">
-        <input type="file" id="fileInput" accept="image/*" hidden>
-        <img id="sourceThumb" class="thumb" alt="" style="display:none">
-        <p id="uploadHint">点击选择 或 拖拽照片到此</p>
+        <input type="file" id="fileInput" accept="image/*" multiple hidden>
+        <p id="uploadHint">点击选择 或 拖拽照片到此（可多选）</p>
         <button type="button" class="btn small" onclick="document.getElementById('fileInput').click()">选择照片</button>
       </div>
     </section>
@@ -38,9 +37,26 @@
       <p class="tip">阈值越大容错越高。对纯色背景效果较好，复杂背景可能不干净。改动后纸上照片会实时刷新。</p>
     </section>
 
-    <!-- 3. 纸张 -->
+    <!-- 3. 边框 -->
     <section class="card">
-      <h2>3. 纸张大小</h2>
+      <h2>3. 边框（打印裁剪用）</h2>
+      <div class="border-row">
+        <label class="border-color-l">
+          颜色
+          <input type="color" id="borderColor" value="#333333">
+        </label>
+        <label class="range-row" style="flex:1; margin-bottom:0">
+          宽度
+          <input type="range" id="borderWidth" min="0" max="5" step="0.1" value="0">
+          <span id="borderWidthVal">0mm</span>
+        </label>
+      </div>
+      <p class="tip">边框画在照片外侧，不影响照片本身，打印后可沿边框裁剪。宽度 0 = 无边框。边框不占排版空间，相邻照片边框可紧贴。</p>
+    </section>
+
+    <!-- 4. 纸张 -->
+    <section class="card">
+      <h2>4. 纸张大小</h2>
       <select id="paperPreset" class="select"></select>
       <div id="paperCustom" class="row" style="display:none">
         <label>宽(mm)<input type="number" id="paperW" value="210" min="10" step="1"></label>
@@ -48,19 +64,19 @@
       </div>
     </section>
 
-    <!-- 4. 排版 -->
+    <!-- 5. 排版 -->
     <section class="card">
-      <h2>4. 排版</h2>
+      <h2>5. 排版</h2>
 
-      <div class="demand-list" id="demandList"></div>
-      <button id="btnAddDemand" type="button" class="btn ghost small-btn">+ 添加尺寸项</button>
+      <div class="photo-list" id="photoList"></div>
+      <p class="tip" id="photoListHint">上传后此处显示照片列表，每张可独立设置尺寸与数量。</p>
 
       <label class="range-row">
         间距 / 页边距
         <input type="range" id="gridGap" min="0" max="10" step="0.5" value="2">
         <span id="gridGapVal">2mm</span>
       </label>
-      <p class="tip">同时作为照片间距与纸张四周留白。每行 ＋ 可往纸张添加 1 张该尺寸。</p>
+      <p class="tip">同时作为照片间距与纸张四周留白。</p>
 
       <button id="btnAutoPack" type="button" class="btn">按需求自动排版</button>
       <div id="packResult" class="result-line"></div>
@@ -102,9 +118,9 @@
       <button id="btnClear" type="button" class="btn ghost" style="margin-top:8px">清空纸张</button>
     </section>
 
-    <!-- 5. 导出 -->
+    <!-- 6. 导出 -->
     <section class="card">
-      <h2>5. 导出 / 打印</h2>
+      <h2>6. 导出 / 打印</h2>
       <div class="btn-grid">
         <button id="btnExportPng" type="button" class="btn">导出 PNG</button>
         <button id="btnExportJpg" type="button" class="btn">导出 JPG</button>

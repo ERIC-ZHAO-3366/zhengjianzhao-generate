@@ -4,31 +4,28 @@
   'use strict';
 
   const state = {
-    sourceImg: null,        // 原始上传图 HTMLImageElement
-    bgColor: null,          // null = 保留原图，否则 '#xxxxxx'
+    photos: [],              // 每项 { id, img, sizes: [{ preset, customW, customH, count }] }
+    bgColor: null,           // null = 保留原图，否则 '#xxxxxx'
     bgThreshold: 60,
+    border: { color: '#333333', width: 0 },
     paperSizeMm: { width: 210, height: 297 },
     gridGapMm: 2,
-    // 需求列表：每项 { preset, customW, customH, count }
-    demands: [
-      { preset: 'one', customW: 25, customH: 35, count: 8 },
-      { preset: 'two', customW: 35, customH: 49, count: 4 },
-    ],
   };
 
   let editor = null;
   const $ = function (id) { return document.getElementById(id); };
+  let photoIdSeq = 0;
 
   // ---------- 初始化 ----------
   function init() {
     editor = new PaperEditor($('paperCanvas'));
+    editor.border = state.border;
     editor.onChange = updateStatus;
     editor.onSelectionChange = updateSelectionUI;
 
     buildPaperPresets();
     buildBgColors();
     bindEvents();
-    renderDemands();
 
     window.addEventListener('resize', function () { editor.fitToContainer(); });
     updateStatus();
@@ -69,15 +66,21 @@
   function bindEvents() {
     const fileInput = $('fileInput');
     fileInput.addEventListener('change', function (e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      loadImageFromFile(file).then(function (img) {
-        state.sourceImg = img;
-        $('uploadHint').style.display = 'none';
-        $('sourceThumb').src = img.src;
-        $('sourceThumb').style.display = 'block';
-        refreshAllPhotos();
-      }).catch(function () { alert('图片加载失败，请重试。'); });
+      const files = Array.prototype.slice.call(e.target.files || []);
+      if (files.length === 0) return;
+      Promise.all(files.map(function (f) { return loadImageFromFile(f); }))
+        .then(function (imgs) {
+          imgs.forEach(function (img) {
+            state.photos.push({
+              id: 'ph_' + (++photoIdSeq),
+              img: img,
+              sizes: [{ preset: 'one', customW: 25, customH: 35, count: 1 }],
+            });
+          });
+          renderPhotoList();
+          fileInput.value = '';
+        })
+        .catch(function () { alert('图片加载失败，请重试。'); });
     });
 
     const dropZone = $('dropZone');
@@ -86,7 +89,7 @@
     dropZone.addEventListener('drop', function (e) {
       e.preventDefault();
       dropZone.classList.remove('drag');
-      if (!e.dataTransfer.files[0]) return;
+      if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
       fileInput.files = e.dataTransfer.files;
       fileInput.dispatchEvent(new Event('change'));
     });
@@ -101,19 +104,29 @@
       refreshAllPhotos();
     });
 
+    $('borderColor').addEventListener('input', function (e) {
+      state.border.color = e.target.value;
+      editor.border = state.border;
+      editor.render();
+    });
+    $('borderWidth').addEventListener('input', function (e) {
+      state.border.width = parseFloat(e.target.value);
+      $('borderWidthVal').textContent = state.border.width + 'mm';
+      editor.border = state.border;
+      editor.render();
+    });
+
     $('gridGap').addEventListener('input', function (e) {
       state.gridGapMm = parseFloat(e.target.value);
       $('gridGapVal').textContent = state.gridGapMm + 'mm';
     });
 
-    $('btnAddDemand').addEventListener('click', addDemand);
     $('btnAutoPack').addEventListener('click', autoPack);
     $('btnClear').addEventListener('click', function () { editor.clear(); updateStatus(); });
     $('btnExportPng').addEventListener('click', function () { exportImg('image/png', '证件照排版.png'); });
     $('btnExportJpg').addEventListener('click', function () { exportImg('image/jpeg', '证件照排版.jpg', 0.95); });
     $('btnPrint').addEventListener('click', printPaper);
 
-    // 自由模式：选择与对齐
     document.querySelectorAll('[data-align]').forEach(function (b) {
       b.addEventListener('click', function () {
         if (!b.disabled) editor.align(b.dataset.align);
@@ -156,18 +169,66 @@
     }
   }
 
-  // ---------- 需求列表（尺寸 + 数量，统一入口） ----------
-  function renderDemands() {
-    const list = $('demandList');
+  // ---------- 照片列表（每张照片可设多个尺寸+数量） ----------
+  function renderPhotoList() {
+    const list = $('photoList');
     list.innerHTML = '';
-    state.demands.forEach(function (d, idx) {
-      list.appendChild(makeDemandRow(d, idx));
+    const hint = $('photoListHint');
+    if (hint) hint.style.display = state.photos.length === 0 ? 'block' : 'none';
+    state.photos.forEach(function (ph, idx) {
+      list.appendChild(makePhotoRow(ph, idx));
     });
   }
 
-  function makeDemandRow(d, idx) {
+  function makePhotoRow(ph, idx) {
+    const item = document.createElement('div');
+    item.className = 'photo-item';
+
+    const head = document.createElement('div');
+    head.className = 'photo-head';
+
+    const thumb = document.createElement('img');
+    thumb.className = 'photo-thumb';
+    thumb.src = ph.img.src;
+    thumb.alt = '';
+    head.appendChild(thumb);
+
+    const label = document.createElement('span');
+    label.className = 'photo-label';
+    label.textContent = '照片 ' + (idx + 1);
+    head.appendChild(label);
+
+    const delPhoto = document.createElement('button');
+    delPhoto.type = 'button'; delPhoto.className = 'del-photo'; delPhoto.textContent = '×'; delPhoto.title = '删除该照片';
+    delPhoto.addEventListener('click', function () {
+      state.photos.splice(idx, 1);
+      renderPhotoList();
+    });
+    head.appendChild(delPhoto);
+
+    item.appendChild(head);
+
+    const sizeList = document.createElement('div');
+    sizeList.className = 'size-list';
+    ph.sizes.forEach(function (s, sIdx) {
+      sizeList.appendChild(makeSizeRow(ph, idx, s, sIdx));
+    });
+    item.appendChild(sizeList);
+
+    const addSize = document.createElement('button');
+    addSize.type = 'button'; addSize.className = 'btn ghost small add-size-btn'; addSize.textContent = '+ 添加尺寸';
+    addSize.addEventListener('click', function () {
+      ph.sizes.push({ preset: 'one', customW: 25, customH: 35, count: 1 });
+      renderPhotoList();
+    });
+    item.appendChild(addSize);
+
+    return item;
+  }
+
+  function makeSizeRow(ph, phIdx, s, sIdx) {
     const row = document.createElement('div');
-    row.className = 'demand-row';
+    row.className = 'size-row';
 
     const sel = document.createElement('select');
     sel.className = 'demand-size';
@@ -175,84 +236,76 @@
       sel.appendChild(new Option(PHOTO_PRESETS[k].name, k));
     });
     sel.appendChild(new Option('自定义', 'custom'));
-    sel.value = d.preset;
+    sel.value = s.preset;
     sel.addEventListener('change', function () {
-      d.preset = sel.value;
-      renderDemands();
+      s.preset = sel.value;
+      renderPhotoList();
     });
     row.appendChild(sel);
 
-    if (d.preset === 'custom') {
+    if (s.preset === 'custom') {
       const w = document.createElement('input');
-      w.type = 'number'; w.className = 'demand-num'; w.value = d.customW; w.min = 5; w.step = 0.1; w.title = '宽(mm)';
-      w.addEventListener('input', function () { d.customW = parseFloat(w.value) || 0; });
+      w.type = 'number'; w.className = 'demand-num'; w.value = s.customW; w.min = 5; w.step = 0.1; w.title = '宽(mm)';
+      w.addEventListener('input', function () { s.customW = parseFloat(w.value) || 0; });
       const h = document.createElement('input');
-      h.type = 'number'; h.className = 'demand-num'; h.value = d.customH; h.min = 5; h.step = 0.1; h.title = '高(mm)';
-      h.addEventListener('input', function () { d.customH = parseFloat(h.value) || 0; });
+      h.type = 'number'; h.className = 'demand-num'; h.value = s.customH; h.min = 5; h.step = 0.1; h.title = '高(mm)';
+      h.addEventListener('input', function () { s.customH = parseFloat(h.value) || 0; });
       row.appendChild(w);
       row.appendChild(h);
     }
 
     const cnt = document.createElement('input');
-    cnt.type = 'number'; cnt.className = 'demand-count'; cnt.value = d.count; cnt.min = 0; cnt.step = 1; cnt.title = '数量';
-    cnt.addEventListener('input', function () { d.count = Math.max(0, parseInt(cnt.value, 10) || 0); });
+    cnt.type = 'number'; cnt.className = 'demand-count'; cnt.value = s.count; cnt.min = 0; cnt.step = 1; cnt.title = '数量';
+    cnt.addEventListener('input', function () { s.count = Math.max(0, parseInt(cnt.value, 10) || 0); });
     row.appendChild(cnt);
 
     const add = document.createElement('button');
-    add.type = 'button'; add.className = 'demand-add'; add.textContent = '＋'; add.title = '添加1张到纸张';
-    add.addEventListener('click', function () { addOnePhoto(idx); });
+    add.type = 'button'; add.className = 'demand-add'; add.textContent = '＋'; add.title = '数量+1';
+    add.addEventListener('click', function () {
+      s.count += 1;
+      cnt.value = s.count;
+    });
     row.appendChild(add);
 
     const del = document.createElement('button');
-    del.type = 'button'; del.className = 'demand-del'; del.textContent = '×'; del.title = '删除该项';
+    del.type = 'button'; del.className = 'demand-del'; del.textContent = '×'; del.title = '删除该尺寸';
     del.addEventListener('click', function () {
-      state.demands.splice(idx, 1);
-      renderDemands();
+      ph.sizes.splice(sIdx, 1);
+      renderPhotoList();
     });
     row.appendChild(del);
 
     return row;
   }
 
-  function addDemand() {
-    state.demands.push({ preset: 'one', customW: 25, customH: 35, count: 1 });
-    renderDemands();
-  }
-
-  function resolveDemandSize(d) {
-    if (d.preset === 'custom') return { width: d.customW, height: d.customH };
-    const p = PHOTO_PRESETS[d.preset];
+  function resolveSize(s) {
+    if (s.preset === 'custom') return { width: s.customW, height: s.customH };
+    const p = PHOTO_PRESETS[s.preset];
     return { width: p.width, height: p.height };
   }
 
-  // 自由模式：添加1张某尺寸到纸张
-  function addOnePhoto(idx) {
-    if (!state.sourceImg) { alert('请先上传照片。'); return; }
-    const d = state.demands[idx];
-    if (!d) return;
-    const sizeMm = resolveDemandSize(d);
-    if (!sizeMm.width || !sizeMm.height) { alert('该尺寸项无效，请填好宽高。'); return; }
-    const photoCanvas = generatePhoto(state.sourceImg, sizeMm, state.bgColor, state.bgThreshold);
-    editor.addPhoto(photoCanvas, sizeMm);
-    updateStatus();
-  }
-
-  // 背景/阈值/换图变化后，重新生成纸上所有照片
+  // 背景/阈值变化后，用各 placement 的 srcImg 重新生成照片
   function refreshAllPhotos() {
-    if (!state.sourceImg) return;
+    let changed = false;
     editor.placements.forEach(function (p) {
-      p.photoCanvas = generatePhoto(state.sourceImg, { width: p.wMm, height: p.hMm }, state.bgColor, state.bgThreshold);
+      if (!p.srcImg) return;
+      p.photoCanvas = generatePhoto(p.srcImg, { width: p.wMm, height: p.hMm }, state.bgColor, state.bgThreshold);
+      changed = true;
     });
-    editor.render();
+    if (changed) editor.render();
   }
 
   // ---------- 批量自动排版 ----------
   function autoPack() {
-    if (!state.sourceImg) { alert('请先上传照片。'); return; }
-    const items = state.demands.map(function (d) {
-      const sizeMm = resolveDemandSize(d);
-      const photoCanvas = generatePhoto(state.sourceImg, sizeMm, state.bgColor, state.bgThreshold);
-      return { photoCanvas: photoCanvas, sizeMm: sizeMm, count: d.count };
+    if (state.photos.length === 0) { alert('请先上传照片。'); return; }
+    const items = [];
+    state.photos.forEach(function (ph) {
+      ph.sizes.forEach(function (s) {
+        const sizeMm = resolveSize(s);
+        if (!sizeMm.width || !sizeMm.height) return;
+        const photoCanvas = generatePhoto(ph.img, sizeMm, state.bgColor, state.bgThreshold);
+        items.push({ photoCanvas: photoCanvas, sizeMm: sizeMm, count: s.count, srcImg: ph.img });
+      });
     });
     const result = editor.autoPack(items, state.gridGapMm);
     let msg = '已排 ' + result.placed + ' 张';

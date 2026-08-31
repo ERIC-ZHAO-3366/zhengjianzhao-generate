@@ -13,6 +13,7 @@ class PaperEditor {
     this.onChange = null;
     this.onSelectionChange = null;
     this._marquee = null;
+    this.border = { color: '#333333', width: 0 };
     this._setupInteraction();
     this.fitToContainer();
   }
@@ -158,7 +159,7 @@ class PaperEditor {
   }
 
   // ---------- 增删 ----------
-  addPhoto(photoCanvas, sizeMm, xMm, yMm) {
+  addPhoto(photoCanvas, sizeMm, srcImg, xMm, yMm) {
     if (xMm == null) xMm = (this.paperSizeMm.width - sizeMm.width) / 2;
     if (yMm == null) yMm = (this.paperSizeMm.height - sizeMm.height) / 2;
     if (xMm < 0) xMm = 0;
@@ -166,6 +167,7 @@ class PaperEditor {
     const p = {
       id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
       photoCanvas: photoCanvas,
+      srcImg: srcImg || null,
       xMm: xMm, yMm: yMm,
       wMm: sizeMm.width, hMm: sizeMm.height,
     };
@@ -230,7 +232,7 @@ class PaperEditor {
     const rects = [];
     items.forEach(function (item) {
       for (let i = 0; i < item.count; i++) {
-        rects.push({ w: item.sizeMm.width, h: item.sizeMm.height, photoCanvas: item.photoCanvas });
+        rects.push({ w: item.sizeMm.width, h: item.sizeMm.height, photoCanvas: item.photoCanvas, srcImg: item.srcImg || null });
       }
     });
     rects.sort(function (a, b) { return b.h - a.h; });
@@ -243,7 +245,7 @@ class PaperEditor {
       if (x + r.w > limitX + 0.001) { y += rowH + gapMm; x = m; rowH = 0; }
       if (y + r.h > limitY + 0.001) { overflow++; continue; }
       this.placements.push({
-        id: 'pack_' + placed, photoCanvas: r.photoCanvas,
+        id: 'pack_' + placed, photoCanvas: r.photoCanvas, srcImg: r.srcImg,
         xMm: x, yMm: y, wMm: r.w, hMm: r.h,
       });
       x += r.w + gapMm;
@@ -260,9 +262,15 @@ class PaperEditor {
     const ctx = this.ctx;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    const bw = (this.border && this.border.width > 0) ? this.mmToView(this.border.width) : 0;
+    const bColor = this.border ? this.border.color : '#333333';
     for (const p of this.placements) {
       const x = this.mmToView(p.xMm), y = this.mmToView(p.yMm);
       const w = this.mmToView(p.wMm), h = this.mmToView(p.hMm);
+      if (bw > 0) {
+        ctx.fillStyle = bColor;
+        ctx.fillRect(x - bw, y - bw, w + 2 * bw, h + 2 * bw);
+      }
       ctx.drawImage(p.photoCanvas, x, y, w, h);
       if (this.selectedIds.has(p.id)) {
         ctx.strokeStyle = '#2f6fed';
@@ -515,8 +523,17 @@ class PaperEditor {
     ctx.fillRect(0, 0, w, h);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
+    const bwMm = (this.border && this.border.width > 0) ? this.border.width : 0;
+    const bColor = this.border ? this.border.color : '#333333';
     for (const p of this.placements) {
-      ctx.drawImage(p.photoCanvas, mmToPx(p.xMm, dpi), mmToPx(p.yMm, dpi), mmToPx(p.wMm, dpi), mmToPx(p.hMm, dpi));
+      const px = mmToPx(p.xMm, dpi), py = mmToPx(p.yMm, dpi);
+      const pw = mmToPx(p.wMm, dpi), ph = mmToPx(p.hMm, dpi);
+      if (bwMm > 0) {
+        const bw = mmToPx(bwMm, dpi);
+        ctx.fillStyle = bColor;
+        ctx.fillRect(px - bw, py - bw, pw + 2 * bw, ph + 2 * bw);
+      }
+      ctx.drawImage(p.photoCanvas, px, py, pw, ph);
     }
     return canvas;
   }
