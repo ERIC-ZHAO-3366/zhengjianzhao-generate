@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>证件照排版工具</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1>证件照排版工具</h1>
+  <span class="sub">本地处理 · 不上传服务器</span>
+</header>
+
+<main class="layout">
+  <aside class="panel">
+
+    <!-- 1. 上传 -->
+    <section class="card">
+      <h2>1. 上传照片</h2>
+      <div id="dropZone" class="dropzone">
+        <input type="file" id="fileInput" accept="image/*" hidden>
+        <img id="sourceThumb" class="thumb" alt="" style="display:none">
+        <p id="uploadHint">点击选择 或 拖拽照片到此</p>
+        <button type="button" class="btn small" onclick="document.getElementById('fileInput').click()">选择照片</button>
+      </div>
+    </section>
+
+    <!-- 2. 背景色 -->
+    <section class="card">
+      <h2>2. 背景色（简易换底）</h2>
+      <div id="bgColors" class="bg-row"></div>
+      <label class="range-row">
+        抠图阈值
+        <input type="range" id="bgThreshold" min="20" max="120" value="60">
+        <span id="bgThresholdVal">60</span>
+      </label>
+      <p class="tip">阈值越大容错越高。对纯色背景效果较好，复杂背景可能不干净。改动后纸上照片会实时刷新。</p>
+    </section>
+
+    <!-- 3. 纸张 -->
+    <section class="card">
+      <h2>3. 纸张大小</h2>
+      <select id="paperPreset" class="select"></select>
+      <div id="paperCustom" class="row" style="display:none">
+        <label>宽(mm)<input type="number" id="paperW" value="210" min="10" step="1"></label>
+        <label>高(mm)<input type="number" id="paperH" value="297" min="10" step="1"></label>
+      </div>
+    </section>
+
+    <!-- 4. 排版 -->
+    <section class="card">
+      <h2>4. 排版</h2>
+
+      <div class="demand-list" id="demandList"></div>
+      <button id="btnAddDemand" type="button" class="btn ghost small-btn">+ 添加尺寸项</button>
+
+      <label class="range-row">
+        间距 / 页边距
+        <input type="range" id="gridGap" min="0" max="10" step="0.5" value="2">
+        <span id="gridGapVal">2mm</span>
+      </label>
+      <p class="tip">同时作为照片间距与纸张四周留白。每行 ＋ 可往纸张添加 1 张该尺寸。</p>
+
+      <button id="btnAutoPack" type="button" class="btn">按需求自动排版</button>
+      <div id="packResult" class="result-line"></div>
+
+      <p class="tip">排版后可直接在纸张上手动拖动照片调整位置。</p>
+
+      <div class="tool-block">
+        <div class="tool-label">批量选择</div>
+        <div class="sel-row">
+          <select id="selectSize" class="select"></select>
+          <button id="btnSelectBySize" type="button" class="btn small">选中</button>
+        </div>
+        <div class="sel-row">
+          <button id="btnSelectAll" type="button" class="btn ghost small">全选</button>
+          <button id="btnSelectNone" type="button" class="btn ghost small">取消选择</button>
+        </div>
+        <div id="selectionInfo" class="result-line">已选 0 张</div>
+      </div>
+
+      <div class="tool-block">
+        <div class="tool-label">对齐（需选 ≥ 2）</div>
+        <div class="align-grid">
+          <button data-align="left" type="button" class="align-btn">左对齐</button>
+          <button data-align="hcenter" type="button" class="align-btn">水平居中</button>
+          <button data-align="right" type="button" class="align-btn">右对齐</button>
+          <button data-align="top" type="button" class="align-btn">顶对齐</button>
+          <button data-align="vcenter" type="button" class="align-btn">垂直居中</button>
+          <button data-align="bottom" type="button" class="align-btn">底对齐</button>
+        </div>
+        <div class="tool-label">分布（需选 ≥ 3）</div>
+        <div class="align-grid">
+          <button data-align="dh" type="button" class="align-btn">水平等距</button>
+          <button data-align="dv" type="button" class="align-btn">垂直等距</button>
+        </div>
+      </div>
+
+      <p class="tip">单击选中 · Ctrl/Shift 多选 · 空白拖动框选 · Delete 删除 · Esc 取消</p>
+
+      <button id="btnClear" type="button" class="btn ghost" style="margin-top:8px">清空纸张</button>
+    </section>
+
+    <!-- 5. 导出 -->
+    <section class="card">
+      <h2>5. 导出 / 打印</h2>
+      <div class="btn-grid">
+        <button id="btnExportPng" type="button" class="btn">导出 PNG</button>
+        <button id="btnExportJpg" type="button" class="btn">导出 JPG</button>
+        <button id="btnPrint" type="button" class="btn primary">打印</button>
+      </div>
+      <p class="tip">导出/打印均按 300dpi 高分辨率渲染。处理在本地进行，不会上传数据。</p>
+    </section>
+
+  </aside>
+
+  <section class="workspace">
+    <div class="ws-head">
+      <span>纸张预览</span>
+      <div class="status">
+        <span>纸张：<b id="statusPaper">210×297 mm</b></span>
+        <span>数量：<b id="statusCount">0</b></span>
+        <span>已选：<b id="statusSelected">0</b></span>
+      </div>
+    </div>
+    <div class="paper-stage">
+      <canvas id="paperCanvas"></canvas>
+    </div>
+  </section>
+</main>
+
+<script src="js/photo.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/export.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
