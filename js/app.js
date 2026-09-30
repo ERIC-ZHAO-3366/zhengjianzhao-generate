@@ -79,8 +79,9 @@
           });
           renderPhotoList();
           fileInput.value = '';
+          showToast('已成功添加 ' + imgs.length + ' 张照片');
         })
-        .catch(function () { alert('图片加载失败，请重试。'); });
+        .catch(function () { showToast('图片加载失败，请重试', 'danger'); });
     });
 
     const dropZone = $('dropZone');
@@ -167,6 +168,24 @@
       editor.setPaperSize(state.paperSizeMm);
       updateStatus();
     }
+  }
+
+  // ---------- 轻提示（toast） ----------
+  let toastTimer = null;
+  function showToast(msg, type) {
+    let t = $('toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'toast';
+      t.className = 'toast';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    if (type === 'danger') t.classList.add('danger');
+    else t.classList.remove('danger');
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2200);
   }
 
   // ---------- 照片列表（每张照片可设多个尺寸+数量） ----------

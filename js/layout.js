@@ -273,7 +273,7 @@ class PaperEditor {
       }
       ctx.drawImage(p.photoCanvas, x, y, w, h);
       if (this.selectedIds.has(p.id)) {
-        ctx.strokeStyle = '#2f6fed';
+        ctx.strokeStyle = '#007aff';
         ctx.lineWidth = 2;
         ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
       }
@@ -282,8 +282,8 @@ class PaperEditor {
       const m = this._marquee;
       const x = Math.min(m.x0, m.x1), y = Math.min(m.y0, m.y1);
       const w = Math.abs(m.x1 - m.x0), h = Math.abs(m.y1 - m.y0);
-      ctx.strokeStyle = '#2f6fed';
-      ctx.fillStyle = 'rgba(47,111,237,0.12)';
+      ctx.strokeStyle = '#007aff';
+      ctx.fillStyle = 'rgba(0,122,255,0.12)';
       ctx.lineWidth = 1;
       ctx.fillRect(x, y, w, h);
       ctx.strokeRect(x, y, w, h);
@@ -391,11 +391,9 @@ class PaperEditor {
       return pos;
     };
 
-    this.canvas.addEventListener('mousedown', function (e) {
+    const onDown = function (pos, additive) {
       if (self.mode !== 'free') return;
-      const pos = getPos(e);
       const hit = self._hitTest(pos.mx, pos.my);
-      const additive = e.ctrlKey || e.metaKey || e.shiftKey;
 
       if (hit) {
         const p = hit.placement;
@@ -432,9 +430,13 @@ class PaperEditor {
         self._marquee = { x0: pos.mx, y0: pos.my, x1: pos.mx, y1: pos.my, active: true };
         self.render();
       }
+    };
+
+    this.canvas.addEventListener('mousedown', function (e) {
+      onDown(getPos(e), e.ctrlKey || e.metaKey || e.shiftKey);
     });
 
-    window.addEventListener('mousemove', function (e) {
+    const onMove = function (e) {
       if (drag) {
         const pos = getPos(e);
         const oneMm = self.mmToView(1);
@@ -460,9 +462,11 @@ class PaperEditor {
         self._marquee.y1 = pos.my;
         self.render();
       }
-    });
+    };
 
-    window.addEventListener('mouseup', function () {
+    window.addEventListener('mousemove', onMove);
+
+    const onUp = function () {
       if (drag) { drag = null; self.canvas.style.cursor = ''; self._snapLines = null; self.render(); }
       if (self._marquee && self._marquee.active) {
         const m = self._marquee;
@@ -482,7 +486,33 @@ class PaperEditor {
         self._marquee = null;
         self.render();
       }
-    });
+    };
+
+    window.addEventListener('mouseup', onUp);
+
+    // 触摸（手机/平板）：拖动照片、双击删除；点空白不拦截以便页面滚动
+    let lastTap = { t: 0, x: 0, y: 0 };
+    this.canvas.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) return;
+      const pos = getPos(e.touches[0]);
+      const hit = self._hitTest(pos.mx, pos.my);
+      if (!hit) {
+        if (self.selectedIds.size) { self.selectedIds.clear(); self.render(); self._fireSel(); }
+        return;
+      }
+      e.preventDefault();
+      const now = Date.now();
+      const isDouble = (now - lastTap.t < 350) && Math.abs(pos.mx - lastTap.x) < 24 && Math.abs(pos.my - lastTap.y) < 24;
+      lastTap = { t: now, x: pos.mx, y: pos.my };
+      if (isDouble) { self.removePhoto(hit.placement.id); return; }
+      onDown(pos, false);
+    }, { passive: false });
+    window.addEventListener('touchmove', function (e) {
+      if (!drag || e.touches.length !== 1) return;
+      e.preventDefault();
+      onMove(e.touches[0]);
+    }, { passive: false });
+    window.addEventListener('touchend', function () { onUp(); });
 
     this.canvas.addEventListener('dblclick', function (e) {
       if (self.mode !== 'free') return;
